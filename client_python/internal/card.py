@@ -262,22 +262,6 @@ class Card:
         )
 
     @command()
-    def set_server_public_key(self, pubkey: rsa.PublicKey):
-        """Set the server's RSA public key"""
-        # Convert e and n to bytes
-        e_bytes = pubkey.e.to_bytes((pubkey.e.bit_length() + 7) // 8, "big")
-        n_bytes = pubkey.n.to_bytes((pubkey.n.bit_length() + 7) // 8, "big")
-
-        # Format as length-value pairs
-        e_len = len(e_bytes).to_bytes(2, "big")
-        n_len = len(n_bytes).to_bytes(2, "big")
-
-        # Combine all components
-        data = e_len + e_bytes + n_len + n_bytes
-
-        return self.instr(INS_SET_SERVER_PUBLIC_KEY, write=data)
-
-    @command()
     def encrypt_for_server(self, data: bytes) -> Response[bytes]:
         """Encrypt data using the server's public key"""
         if isinstance(data, str):
@@ -286,17 +270,24 @@ class Card:
 
     @command(auth=True)
     def encrypt_payload(self, data: bytes) -> Response[bytes]:
-        """Encrypt payload using the card's private key"""
+        """Encrypt data using the card's private key"""
         if isinstance(data, str):
             data = data.encode("utf-8")
         return self.instr(INS_ENCRYPT_PAYLOAD, write=data)
 
     @command(auth=True)
     def decrypt_payload(self, data: bytes) -> Response[bytes]:
-        """Decrypt payload using the card's private key"""
+        """Decrypt data using the card's private key"""
         if isinstance(data, str):
             data = data.encode("utf-8")
         return self.instr(INS_DECRYPT_PAYLOAD, write=data)
+
+    @command()
+    def get_server_public_key(self) -> Response[rsa.PublicKey]:
+        """Get the server's public key"""
+        return self.instr(INS_GET_SERVER_PUBLIC_KEY).with_processor(
+            lambda res: rsa.PublicKey(*Card._deserialize_pair(res.data)[::-1])
+        )
 
     def commands(self):
         members = {name: getattr(self, name) for name in dir(self)}

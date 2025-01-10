@@ -86,10 +86,6 @@ public class NotreProjet extends Applet {
      */
     public static final byte INS_GET_PRIVATE_KEY = 0x08;
     /**
-     * @see NotreProjet#setServerPublicKey(APDU)
-     */
-    public static final byte INS_SET_SERVER_PUBLIC_KEY = 0x09;
-    /**
      * @see NotreProjet#encryptForServer(APDU)
      */
     public static final byte INS_ENCRYPT_FOR_SERVER = 0x0A;
@@ -101,6 +97,10 @@ public class NotreProjet extends Applet {
      * @see NotreProjet#decryptPayload(APDU)
      */
     public static final byte INS_DECRYPT_PAYLOAD = 0x0C;
+    /**
+     * @see NotreProjet#getServerPublicKey(APDU)
+     */
+    public static final byte INS_GET_SERVER_PUBLIC_KEY = 0x0D;
     /**
      * PIN failed, more than 3 tries remaining
      */
@@ -122,6 +122,83 @@ public class NotreProjet extends Applet {
      */
     public static final byte[] DEFAULT_PIN = { 0x01, 0x02, 0x03, 0x04 };
     private static final short KEY_BITS = 512;
+    /*
+     * Server's public key (e)
+     */
+    private static final byte[] SERVER_KEY_E = {
+        (byte) 0x01,
+        (byte) 0x00,
+        (byte) 0x01,
+    };
+    /*
+     * Server's public key (n)
+     */
+    private static final byte[] SERVER_KEY_N = {
+        (byte) 0x8A,
+        (byte) 0xCA,
+        (byte) 0xA7,
+        (byte) 0x43,
+        (byte) 0x59,
+        (byte) 0x1E,
+        (byte) 0x92,
+        (byte) 0x6E,
+        (byte) 0xDD,
+        (byte) 0x2C,
+        (byte) 0x0E,
+        (byte) 0x9B,
+        (byte) 0xE4,
+        (byte) 0x72,
+        (byte) 0x1B,
+        (byte) 0x00,
+        (byte) 0xBC,
+        (byte) 0xAD,
+        (byte) 0x61,
+        (byte) 0x69,
+        (byte) 0x20,
+        (byte) 0x9E,
+        (byte) 0x76,
+        (byte) 0x28,
+        (byte) 0xDF,
+        (byte) 0x57,
+        (byte) 0xE5,
+        (byte) 0x37,
+        (byte) 0xCC,
+        (byte) 0xC3,
+        (byte) 0x46,
+        (byte) 0xF2,
+        (byte) 0x63,
+        (byte) 0x10,
+        (byte) 0x17,
+        (byte) 0x99,
+        (byte) 0x06,
+        (byte) 0xA3,
+        (byte) 0xD2,
+        (byte) 0x88,
+        (byte) 0xF6,
+        (byte) 0x38,
+        (byte) 0x47,
+        (byte) 0xA4,
+        (byte) 0x25,
+        (byte) 0x29,
+        (byte) 0x50,
+        (byte) 0x8A,
+        (byte) 0xD2,
+        (byte) 0x68,
+        (byte) 0xAE,
+        (byte) 0xFA,
+        (byte) 0x5A,
+        (byte) 0xCC,
+        (byte) 0x93,
+        (byte) 0xD7,
+        (byte) 0xE7,
+        (byte) 0x92,
+        (byte) 0x20,
+        (byte) 0x0F,
+        (byte) 0xCD,
+        (byte) 0x29,
+        (byte) 0x65,
+        (byte) 0x15,
+    };
     /**
      * PIN
      */
@@ -139,7 +216,19 @@ public class NotreProjet extends Applet {
         register();
         pin = new OwnerPIN(MAX_PIN_TRY, PIN_LENGTH);
         factoryReset();
-        serverPublicKey = null;
+
+        // Initialize server public key
+        serverPublicKey = (RSAPublicKey) KeyPair.ALG_RSA;
+        serverPublicKey.setExponent(
+            SERVER_KEY_E,
+            (short) 0,
+            (short) SERVER_KEY_E.length
+        );
+        serverPublicKey.setModulus(
+            SERVER_KEY_N,
+            (short) 0,
+            (short) SERVER_KEY_N.length
+        );
     }
 
     public static void install(byte[] bArray, short bOffset, byte bLength) {
@@ -273,9 +362,6 @@ public class NotreProjet extends Applet {
             case INS_GET_PRIVATE_KEY:
                 getPrivateKey(apdu);
                 break;
-            case INS_SET_SERVER_PUBLIC_KEY:
-                setServerPublicKey(apdu);
-                break;
             case INS_ENCRYPT_FOR_SERVER:
                 encryptForServer(apdu);
                 break;
@@ -284,6 +370,9 @@ public class NotreProjet extends Applet {
                 break;
             case INS_DECRYPT_PAYLOAD:
                 decryptPayload(apdu);
+                break;
+            case INS_GET_SERVER_PUBLIC_KEY:
+                getServerPublicKey(apdu);
                 break;
             default:
                 ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
@@ -384,7 +473,6 @@ public class NotreProjet extends Applet {
     private void factoryReset() {
         setDefaultPin();
         generateKeyPair();
-        serverPublicKey = null;
     }
 
     private static final byte[] ASN1_SHA256 = {
@@ -477,6 +565,54 @@ public class NotreProjet extends Applet {
     }
 
     /**
+     * <h2>"Get server public key" command.</h2>
+     * <p>Sends back the server public key to the client.</p>
+     * <p>Output format:</p>
+     * <table>
+     *     <tr><th>Offset</th><th>Length</th><th>Value</th></tr>
+     *     <tr><td>0</td><td>2</td><td>Exponent length (<code>exp_len</code>)</td></tr>
+     *     <tr><td>2</td><td><code>exp_len</code></td><td>Exponent</td></tr>
+     *     <tr><td>2 + <code>exp_len</code></td><td>2</td><td>Modulus length (<code>mod_len</code>)</td></tr>
+     *     <tr><td>4 + <code>exp_len</code></td><td><code>mod_len</code></td><td>Modulus</td></tr>
+     * </table>
+     *
+     * @param apdu the APDU object
+     */
+    private void getServerPublicKey(APDU apdu) {
+        byte[] buffer = apdu.getBuffer();
+        short offset = ISO7816.OFFSET_CDATA;
+
+        // Get exponent length and data
+        Util.setShort(buffer, offset, (short) SERVER_KEY_E.length);
+        Util.arrayCopy(
+            SERVER_KEY_E,
+            (short) 0,
+            buffer,
+            (short) (offset + 2),
+            (short) SERVER_KEY_E.length
+        );
+
+        // Get modulus length and data
+        Util.setShort(
+            buffer,
+            (short) (offset + 2 + SERVER_KEY_E.length),
+            (short) SERVER_KEY_N.length
+        );
+        Util.arrayCopy(
+            SERVER_KEY_N,
+            (short) 0,
+            buffer,
+            (short) (offset + 4 + SERVER_KEY_E.length),
+            (short) SERVER_KEY_N.length
+        );
+
+        apdu.setOutgoingAndSend(
+            offset,
+            (short) (4 + SERVER_KEY_E.length + SERVER_KEY_N.length)
+        );
+    }
+
+    /**
      * <h2>"Get private key" command.</h2>
      * <p>Checks that the user is logged in ({@link NotreProjet#checkLoggedIn()}), and if so,
      * sends back the private key ({@link NotreProjet#keyPair}) to the client.</p>
@@ -502,39 +638,6 @@ public class NotreProjet extends Applet {
         short qLen = key.getQ(buffer, (short) (offset + 4 + pLen));
         Util.setShort(buffer, (short) (offset + 2 + pLen), qLen);
         apdu.setOutgoingAndSend(offset, (short) (4 + pLen + qLen));
-    }
-
-    /**
-     * <h2>"Set server public key" command.</h2>
-     * <p>Sets the server's public key used for verification.</p>
-     * <p>Input format:</p>
-     * <table>
-     *     <tr><th>Offset</th><th>Length</th><th>Value</th></tr>
-     *     <tr><td>0</td><td>2</td><td>Exponent length (<code>exp_len</code>)</td></tr>
-     *     <tr><td>2</td><td><code>exp_len</code></td><td>Exponent</td></tr>
-     *     <tr><td>2 + <code>exp_len</code></td><td>2</td><td>Modulus length (<code>mod_len</code>)</td></tr>
-     *     <tr><td>4 + <code>exp_len</code></td><td><code>mod_len</code></td><td>Modulus</td></tr>
-     * </table>
-     *
-     * @param apdu the APDU object
-     */
-    private void setServerPublicKey(APDU apdu) {
-        byte[] buffer = apdu.getBuffer();
-        short offset = ISO7816.OFFSET_CDATA;
-
-        short expLen = Util.getShort(buffer, offset);
-        short modLen = Util.getShort(buffer, (short) (offset + 2 + expLen));
-
-        if (serverPublicKey == null) {
-            serverPublicKey = (RSAPublicKey) KeyPair.ALG_RSA;
-        }
-
-        serverPublicKey.setExponent(buffer, (short) (offset + 2), expLen);
-        serverPublicKey.setModulus(
-            buffer,
-            (short) (offset + 4 + expLen),
-            modLen
-        );
     }
 
     /**
