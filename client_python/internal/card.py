@@ -2,7 +2,7 @@ import hashlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypeVar, Generic, Callable, Tuple
+from typing import Callable, Generic, Tuple, TypeVar
 
 import rsa
 from smartcard.Exceptions import NoCardException
@@ -234,6 +234,29 @@ class Card:
         pubkey = self.get_public_key().processed
         ok = rsa.verify(data, signature, pubkey)
         return "Signature is " + (GREEN("valid") + f" (using {MAGENTA(ok)})" if ok else RED("invalid"))
+
+    @command()
+    def set_server_public_key(self, pubkey: rsa.PublicKey):
+        """Set the server's RSA public key"""
+        # Convert e and n to bytes
+        e_bytes = pubkey.e.to_bytes((pubkey.e.bit_length() + 7) // 8, 'big')
+        n_bytes = pubkey.n.to_bytes((pubkey.n.bit_length() + 7) // 8, 'big')
+
+        # Format as length-value pairs
+        e_len = len(e_bytes).to_bytes(2, 'big')
+        n_len = len(n_bytes).to_bytes(2, 'big')
+
+        # Combine all components
+        data = e_len + e_bytes + n_len + n_bytes
+
+        return self.instr(INS_SET_SERVER_PUBLIC_KEY, write=data)
+
+    @command()
+    def encrypt_for_server(self, data: bytes) -> Response[bytes]:
+        """Encrypt data using the server's public key"""
+        if isinstance(data, str):
+            data = data.encode('utf-8')
+        return self.instr(INS_ENCRYPT_FOR_SERVER, write=data)
 
     def commands(self):
         members = {name: getattr(self, name) for name in dir(self)}

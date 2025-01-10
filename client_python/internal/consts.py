@@ -20,9 +20,14 @@ INS_GET_PRIVATE_KEY = 0x08
 INS_LOAD = 0xE8
 INS_SELECT = 0xA4
 
+INS_SET_SERVER_PUBLIC_KEY = 0x09
+INS_ENCRYPT_FOR_SERVER = 0x0A
+
 
 def get_instruction_name(ins):
-    results = [key for key, val in globals().items() if val == ins and key.startswith("INS_")]
+    results = [
+        key for key, val in globals().items() if val == ins and key.startswith("INS_")
+    ]
     if results:
         return results[0][4:]
     return f"{ins:02X}"
