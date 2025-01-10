@@ -42,6 +42,10 @@ Toutes les communications avec l'applet se font en T=0.
 | `06`  | Signe le hash SHA-256 fourni            | Hash (32 o) | Signature (64 o) | Oui         |
 | `07`  | Renvoie la clé publique                 |             | Clé publique     |             |
 | `08`  | Renvoie la clé privée                   |             | Clé privée       | Oui         |
+| `09`  | Configure la clé publique du serveur    | Clé publique|                  |             |
+| `0A`  | Chiffre des données pour le serveur     | Données     | Données chiffrées|             |
+| `0B`  | Chiffre un payload                      | Données     | Données chiffrées| Oui         |
+| `0C`  | Déchiffre un payload                    | Chiffré     | Données en clair | Oui         |
 
 #### Format de la clé publique
 

@@ -16,7 +16,7 @@ Exemple : glisser le fichier `test.txt`, le fichier `test.txt.sign` sera créé.
 
 ![image](https://user-images.githubusercontent.com/4533568/202866562-255b93ab-926d-4436-972e-ad5d5950af82.png)
 
-  
+
 ## REPL `repl.py`
 
 REPL simple permettant de tester interactivement les fonctionnalités de l'applet. Une aide est disponible en tapant `help`.
@@ -90,3 +90,35 @@ Il est ainsi possible de vérifier côté client la signature, par exemple avec 
 $ openssl dgst -sha256 -verify carte.pub -signature test.txt.sign test.txt
 Verified OK
 ```
+
+### Chiffrement et déchiffrement
+
+La carte peut être utilisée pour chiffrer et déchiffrer des données de plusieurs façons :
+
+#### Communication sécurisée avec un serveur
+
+On peut configurer une clé publique de serveur et chiffrer des données pour ce serveur :
+
+```python
+>>> pubkey = rsa.PublicKey(65537, 12345...)  # Utiliser une vraie clé
+>>> card.set_server_public_key(pubkey)
+Success
+>>> encrypted = card.encrypt_for_server("Message secret")
+>>> print(encrypted.data.hex())
+```
+
+#### Chiffrement général
+
+La carte peut également chiffrer et déchiffrer des données avec sa propre paire de clés :
+
+```python
+>>> card.login("1234")  # Authentification requise
+Success
+>>> encrypted = card.encrypt_payload("Hello world!")
+>>> print(encrypted.data.hex())
+>>> decrypted = card.decrypt_payload(encrypted.data)
+>>> print(decrypted.data.decode())
+Hello world!
+```
+
+Ces fonctions nécessitent d'être authentifié sur la carte.
