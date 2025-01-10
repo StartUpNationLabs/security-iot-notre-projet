@@ -94,6 +94,14 @@ public class NotreProjet extends Applet {
      */
     public static final byte INS_ENCRYPT_FOR_SERVER = 0x0A;
     /**
+     * @see NotreProjet#encryptPayload(APDU)
+     */
+    public static final byte INS_ENCRYPT_PAYLOAD = 0x0B;
+    /**
+     * @see NotreProjet#decryptPayload(APDU)
+     */
+    public static final byte INS_DECRYPT_PAYLOAD = 0x0C;
+    /**
      * PIN failed, more than 3 tries remaining
      */
     public static final short SW_PIN_FAILED_MORE = (short) 0x9704;
@@ -270,6 +278,12 @@ public class NotreProjet extends Applet {
                 break;
             case INS_ENCRYPT_FOR_SERVER:
                 encryptForServer(apdu);
+                break;
+            case INS_ENCRYPT_PAYLOAD:
+                encryptPayload(apdu);
+                break;
+            case INS_DECRYPT_PAYLOAD:
+                decryptPayload(apdu);
                 break;
             default:
                 ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
@@ -537,6 +551,56 @@ public class NotreProjet extends Applet {
         byte[] buffer = apdu.getBuffer();
         Cipher cipher = Cipher.getInstance(Cipher.ALG_RSA_PKCS1, false);
         cipher.init(serverPublicKey, Cipher.MODE_ENCRYPT);
+
+        short inputLength = buffer[ISO7816.OFFSET_LC];
+        short outLength = cipher.doFinal(
+            buffer,
+            ISO7816.OFFSET_CDATA,
+            inputLength,
+            buffer,
+            ISO7816.OFFSET_CDATA
+        );
+
+        apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, outLength);
+    }
+
+    /**
+     * <h2>"Encrypt payload" command.</h2>
+     * <p>Encrypts a payload using the card's private key.</p>
+     *
+     * @param apdu the APDU object
+     */
+    private void encryptPayload(APDU apdu) {
+        checkLoggedIn();
+
+        byte[] buffer = apdu.getBuffer();
+        Cipher cipher = Cipher.getInstance(Cipher.ALG_RSA_PKCS1, false);
+        cipher.init(keyPair.getPrivate(), Cipher.MODE_ENCRYPT);
+
+        short inputLength = buffer[ISO7816.OFFSET_LC];
+        short outLength = cipher.doFinal(
+            buffer,
+            ISO7816.OFFSET_CDATA,
+            inputLength,
+            buffer,
+            ISO7816.OFFSET_CDATA
+        );
+
+        apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, outLength);
+    }
+
+    /**
+     * <h2>"Decrypt payload" command.</h2>
+     * <p>Decrypts a payload using the card's private key.</p>
+     *
+     * @param apdu the APDU object
+     */
+    private void decryptPayload(APDU apdu) {
+        checkLoggedIn();
+
+        byte[] buffer = apdu.getBuffer();
+        Cipher cipher = Cipher.getInstance(Cipher.ALG_RSA_PKCS1, false);
+        cipher.init(keyPair.getPrivate(), Cipher.MODE_DECRYPT);
 
         short inputLength = buffer[ISO7816.OFFSET_LC];
         short outLength = cipher.doFinal(

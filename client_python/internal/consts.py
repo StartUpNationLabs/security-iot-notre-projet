@@ -23,6 +23,9 @@ INS_SELECT = 0xA4
 INS_SET_SERVER_PUBLIC_KEY = 0x09
 INS_ENCRYPT_FOR_SERVER = 0x0A
 
+INS_ENCRYPT_PAYLOAD = 0x0B
+INS_DECRYPT_PAYLOAD = 0x0C
+
 
 def get_instruction_name(ins):
     results = [

@@ -11,8 +11,8 @@ from smartcard.util import toHexString
 
 from .consts import *
 
-T = TypeVar('T')
-U = TypeVar('U')
+T = TypeVar("T")
+U = TypeVar("U")
 
 DESCRIPTION_COLOR = {
     "E": RED,  # Error
@@ -37,13 +37,16 @@ def apply_color(msg, kind):
 
 with open(Path(__file__).with_name("response_descriptions.txt")) as fp:
     raw_desc = [line.strip().split("\t") for line in fp]
-    response_descriptions = [(
-        sw1,
-        # convert .. blocks to regex group so we can extract values later
-        re.sub(r"^\.", "(.", re.sub(r"\.$", ".)", sw2)),
-        # make the message colored depending on the kind
-        apply_color(desc, kind)
-    ) for sw1, sw2, kind, desc in raw_desc]
+    response_descriptions = [
+        (
+            sw1,
+            # convert .. blocks to regex group so we can extract values later
+            re.sub(r"^\.", "(.", re.sub(r"\.$", ".)", sw2)),
+            # make the message colored depending on the kind
+            apply_color(desc, kind),
+        )
+        for sw1, sw2, kind, desc in raw_desc
+    ]
 
 
 @dataclass
@@ -61,14 +64,20 @@ class StatusWord:
 
     def get_description(self):
         for s1, s2, desc in response_descriptions:
-            if re.match(s1, "%02X" % self.sw1) and (m2 := re.match(s2, "%02X" % self.sw2)):
+            if re.match(s1, "%02X" % self.sw1) and (
+                m2 := re.match(s2, "%02X" % self.sw2)
+            ):
                 if "." in s2:
-                    return re.sub(r"\\x+\\", str(int(m2.group(1), 16)), desc, flags=re.IGNORECASE)
+                    return re.sub(
+                        r"\\x+\\", str(int(m2.group(1), 16)), desc, flags=re.IGNORECASE
+                    )
                 return desc
         return "Unknown response"
 
     def __str__(self):
-        return MAGENTA(f"{self.sw1:02X} {self.sw2:02X}") + f" ({self.get_description()})"
+        return (
+            MAGENTA(f"{self.sw1:02X} {self.sw2:02X}") + f" ({self.get_description()})"
+        )
 
 
 @dataclass
@@ -88,8 +97,9 @@ class Response(Generic[T], Exception):
     @property
     def processed(self):
         if not hasattr(self, "_processed"):
-            self._processed = self._processor(self) if hasattr(
-                self, "_processor") else self.data
+            self._processed = (
+                self._processor(self) if hasattr(self, "_processor") else self.data
+            )
         return self._processed
 
     def __str__(self) -> str:
@@ -112,22 +122,25 @@ class Card:
     def query(self, *command):
         data, sw1, sw2 = self.connection.transmit(list(command))
         sw = StatusWord(sw1, sw2)
-        log(GREEN("->"),
-            " ".join("%02X" % c for c in command))
+        log(GREEN("->"), " ".join("%02X" % c for c in command))
         log(BLUE("<-"), sw)
         data = bytes(data)
         if data:
-            log(RED("<-"),
+            log(
+                RED("<-"),
                 f"{YELLOW(len(data))} bytes read:",
                 "[" + " ".join("%02X" % c for c in data) + "]",
                 "==",
                 data.decode("utf-8")  # display result as string
                 # check if result only contains printable characters
                 if all(32 <= c <= 127 for c in data)
-                else "<binary>")  # if not then it's probably a blob
+                else "<binary>",
+            )  # if not then it's probably a blob
         return Response(data, sw)
 
-    def instr(self, ins, p1=0, p2=0, write=bytes(), recv=0, cla=CLA_PROJET) -> Response[bytes]:
+    def instr(
+        self, ins, p1=0, p2=0, write=bytes(), recv=0, cla=CLA_PROJET
+    ) -> Response[bytes]:
         write = bytes(write)
         instr_name = get_instruction_name(ins)
         log(
@@ -135,12 +148,17 @@ class Card:
             f"P1={YELLOW(f'{p1:02X}')} "
             f"P2={YELLOW(f'{p2:02X}')} "
             f"write=[{YELLOW(toHexString(list(write)))}] "
-            f"read={YELLOW(f'{recv}')}")
-        res = self.query(cla, ins,
-                         p1, p2,
-                         # send length and data only if `write` is not empty
-                         *([len(write), *write] if write else []),
-                         recv)
+            f"read={YELLOW(f'{recv}')}"
+        )
+        res = self.query(
+            cla,
+            ins,
+            p1,
+            p2,
+            # send length and data only if `write` is not empty
+            *([len(write), *write] if write else []),
+            recv,
+        )
         if res.status.sw1 == 0x6C:
             log(YELLOW("Retrying with length=SW2"))
             return self.instr(ins, p1, p2, write, res.status.sw2)
@@ -190,26 +208,32 @@ class Card:
     def _deserialize_pair(data: bytes) -> Tuple[int, int]:
         """Deserialize a data block with the structure { len1: u16, data1: u8[len1], len2: u16, data2: u8[len2] }"""
         len_1 = int.from_bytes(data[:2], "big")
-        num_1 = int.from_bytes(data[2:2 + len_1], "big")
-        len_2 = int.from_bytes(data[2 + len_1:2 + len_1 + 2], "big")
-        num_2 = int.from_bytes(data[2 + len_1 + 2:2 + len_1 + 2 + len_2], "big")
+        num_1 = int.from_bytes(data[2 : 2 + len_1], "big")
+        len_2 = int.from_bytes(data[2 + len_1 : 2 + len_1 + 2], "big")
+        num_2 = int.from_bytes(data[2 + len_1 + 2 : 2 + len_1 + 2 + len_2], "big")
         return num_1, num_2
 
     @command()
     def get_public_key(self) -> Response[rsa.PublicKey]:
         """Get the public key of the card"""
-        return self.instr(0x07).with_processor(lambda res: rsa.PublicKey(*Card._deserialize_pair(res.data)[::-1]))
+        return self.instr(0x07).with_processor(
+            lambda res: rsa.PublicKey(*Card._deserialize_pair(res.data)[::-1])
+        )
 
     @command(auth=True)
     def get_private_key(self) -> Response[Tuple[int, int]]:
         """Get the private key of the card"""
-        return self.instr(0x08).with_processor(lambda res: Card._deserialize_pair(res.data))
+        return self.instr(0x08).with_processor(
+            lambda res: Card._deserialize_pair(res.data)
+        )
 
     @command()
     def verbose(self):
         """Toggle verbose mode"""
         Logger.log_verbose = not Logger.log_verbose
-        print("Verbose mode", GREEN('enabled') if Logger.log_verbose else RED('disabled'))
+        print(
+            "Verbose mode", GREEN("enabled") if Logger.log_verbose else RED("disabled")
+        )
 
     @command(auth=True)
     def export_keypair(self, outfile):
@@ -233,18 +257,20 @@ class Card:
             signature = fp.read()
         pubkey = self.get_public_key().processed
         ok = rsa.verify(data, signature, pubkey)
-        return "Signature is " + (GREEN("valid") + f" (using {MAGENTA(ok)})" if ok else RED("invalid"))
+        return "Signature is " + (
+            GREEN("valid") + f" (using {MAGENTA(ok)})" if ok else RED("invalid")
+        )
 
     @command()
     def set_server_public_key(self, pubkey: rsa.PublicKey):
         """Set the server's RSA public key"""
         # Convert e and n to bytes
-        e_bytes = pubkey.e.to_bytes((pubkey.e.bit_length() + 7) // 8, 'big')
-        n_bytes = pubkey.n.to_bytes((pubkey.n.bit_length() + 7) // 8, 'big')
+        e_bytes = pubkey.e.to_bytes((pubkey.e.bit_length() + 7) // 8, "big")
+        n_bytes = pubkey.n.to_bytes((pubkey.n.bit_length() + 7) // 8, "big")
 
         # Format as length-value pairs
-        e_len = len(e_bytes).to_bytes(2, 'big')
-        n_len = len(n_bytes).to_bytes(2, 'big')
+        e_len = len(e_bytes).to_bytes(2, "big")
+        n_len = len(n_bytes).to_bytes(2, "big")
 
         # Combine all components
         data = e_len + e_bytes + n_len + n_bytes
@@ -255,12 +281,28 @@ class Card:
     def encrypt_for_server(self, data: bytes) -> Response[bytes]:
         """Encrypt data using the server's public key"""
         if isinstance(data, str):
-            data = data.encode('utf-8')
+            data = data.encode("utf-8")
         return self.instr(INS_ENCRYPT_FOR_SERVER, write=data)
+
+    @command(auth=True)
+    def encrypt_payload(self, data: bytes) -> Response[bytes]:
+        """Encrypt payload using the card's private key"""
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        return self.instr(INS_ENCRYPT_PAYLOAD, write=data)
+
+    @command(auth=True)
+    def decrypt_payload(self, data: bytes) -> Response[bytes]:
+        """Decrypt payload using the card's private key"""
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        return self.instr(INS_DECRYPT_PAYLOAD, write=data)
 
     def commands(self):
         members = {name: getattr(self, name) for name in dir(self)}
-        return {name: func for name, func in members.items() if hasattr(func, "is_command")}
+        return {
+            name: func for name, func in members.items() if hasattr(func, "is_command")
+        }
 
 
 def init_card() -> Card:
