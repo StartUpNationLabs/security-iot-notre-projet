@@ -16,12 +16,31 @@ import javacardx.crypto.Cipher;
  * @noinspection unused
  */
 public class NotreProjet extends Applet {
+
     /**
      * Test string message
      */
-    public static final byte[] TEST_STRING = {0x56, 0x69, 0x72, 0x74, 0x75, 0x61, 0x6c, 0x62, 0x6f,
+    public static final byte[] TEST_STRING = {
+        0x56,
+        0x69,
+        0x72,
+        0x74,
+        0x75,
+        0x61,
+        0x6c,
+        0x62,
+        0x6f,
         0x78,
-        0x20, 0x6d, 0x27, 0x61, 0x20, 0x74, 0x75, 0x65, 0x72};
+        0x20,
+        0x6d,
+        0x27,
+        0x61,
+        0x20,
+        0x74,
+        0x75,
+        0x65,
+        0x72,
+    };
     /**
      * Number of digits in the PIN
      */
@@ -67,6 +86,10 @@ public class NotreProjet extends Applet {
      */
     public static final byte INS_GET_PRIVATE_KEY = 0x08;
     /**
+     * @see NotreProjet#setServerPublicKey(APDU)
+     */
+    public static final byte INS_SET_SERVER_PUBLIC_KEY = 0x09;
+    /**
      * PIN failed, more than 3 tries remaining
      */
     public static final short SW_PIN_FAILED_MORE = (short) 0x9704;
@@ -85,7 +108,7 @@ public class NotreProjet extends Applet {
     /**
      * Default PIN (1234)
      */
-    public static final byte[] DEFAULT_PIN = {0x01, 0x02, 0x03, 0x04};
+    public static final byte[] DEFAULT_PIN = { 0x01, 0x02, 0x03, 0x04 };
     private static final short KEY_BITS = 512;
     /**
      * PIN
@@ -95,11 +118,16 @@ public class NotreProjet extends Applet {
      * RSA key pair
      */
     private KeyPair keyPair;
+    /*
+     * Server's RSA public key
+     */
+    private RSAPublicKey serverPublicKey;
 
     protected NotreProjet() {
         register();
         pin = new OwnerPIN(MAX_PIN_TRY, PIN_LENGTH);
         factoryReset();
+        serverPublicKey = null;
     }
 
     public static void install(byte[] bArray, short bOffset, byte bLength) {
@@ -163,7 +191,6 @@ public class NotreProjet extends Applet {
         }
     }
 
-
     /**
      * <h2>Main APDU entry point.</h2>
      * <p>Checks if the applet is being selected; if so, throws {@link ISO7816#SW_NO_ERROR}.</p>
@@ -184,7 +211,10 @@ public class NotreProjet extends Applet {
 
         byte[] buffer = apdu.getBuffer();
 
-        if ((buffer[ISO7816.OFFSET_CLA] == 0) && (buffer[ISO7816.OFFSET_INS] == (byte) 0xA4)) {
+        if (
+            (buffer[ISO7816.OFFSET_CLA] == 0) &&
+            (buffer[ISO7816.OFFSET_INS] == (byte) 0xA4)
+        ) {
             // return if this is a SELECT FILE command
             return;
         }
@@ -195,7 +225,10 @@ public class NotreProjet extends Applet {
         }
 
         // ensure the entirety of the buffer is available for the processing
-        short bytesLeft = Util.makeShort((byte) 0x00, buffer[ISO7816.OFFSET_LC]);
+        short bytesLeft = Util.makeShort(
+            (byte) 0x00,
+            buffer[ISO7816.OFFSET_LC]
+        );
         if (bytesLeft != apdu.setIncomingAndReceive()) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
@@ -228,6 +261,9 @@ public class NotreProjet extends Applet {
             case INS_GET_PRIVATE_KEY:
                 getPrivateKey(apdu);
                 break;
+            case INS_SET_SERVER_PUBLIC_KEY:
+                setServerPublicKey(apdu);
+                break;
             default:
                 ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
                 break;
@@ -250,9 +286,17 @@ public class NotreProjet extends Applet {
      */
     private void hello(APDU apdu) {
         byte[] buffer = apdu.getBuffer();
-        Util.arrayCopy(TEST_STRING, (short) 0, buffer, ISO7816.OFFSET_CDATA,
-            (short) TEST_STRING.length);
-        apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, (short) TEST_STRING.length);
+        Util.arrayCopy(
+            TEST_STRING,
+            (short) 0,
+            buffer,
+            ISO7816.OFFSET_CDATA,
+            (short) TEST_STRING.length
+        );
+        apdu.setOutgoingAndSend(
+            ISO7816.OFFSET_CDATA,
+            (short) TEST_STRING.length
+        );
     }
 
     /**
@@ -319,12 +363,29 @@ public class NotreProjet extends Applet {
     private void factoryReset() {
         setDefaultPin();
         generateKeyPair();
+        serverPublicKey = null;
     }
 
     private static final byte[] ASN1_SHA256 = {
-        (byte) 0x30, (byte) 0x31, (byte) 0x30, (byte) 0x0d, (byte) 0x06, (byte) 0x09, (byte) 0x60,
-        (byte) 0x86, (byte) 0x48, (byte) 0x01, (byte) 0x65, (byte) 0x03, (byte) 0x04, (byte) 0x02,
-        (byte) 0x01, (byte) 0x05, (byte) 0x00, (byte) 0x04, (byte) 0x20
+        (byte) 0x30,
+        (byte) 0x31,
+        (byte) 0x30,
+        (byte) 0x0d,
+        (byte) 0x06,
+        (byte) 0x09,
+        (byte) 0x60,
+        (byte) 0x86,
+        (byte) 0x48,
+        (byte) 0x01,
+        (byte) 0x65,
+        (byte) 0x03,
+        (byte) 0x04,
+        (byte) 0x02,
+        (byte) 0x01,
+        (byte) 0x05,
+        (byte) 0x00,
+        (byte) 0x04,
+        (byte) 0x20,
     };
 
     /**
@@ -342,11 +403,30 @@ public class NotreProjet extends Applet {
         Cipher cipher = Cipher.getInstance(Cipher.ALG_RSA_PKCS1, false);
         cipher.init(keyPair.getPrivate(), Cipher.MODE_ENCRYPT);
         short inputLength = buffer[ISO7816.OFFSET_LC];
-        byte[] markedData = new byte[(short)(inputLength + ASN1_SHA256.length)];
-        Util.arrayCopy(ASN1_SHA256, (short) 0, markedData, (short) 0, (short) ASN1_SHA256.length);
-        Util.arrayCopy(buffer, ISO7816.OFFSET_CDATA, markedData, (short) ASN1_SHA256.length, inputLength);
+        byte[] markedData = new byte[(short) (inputLength +
+            ASN1_SHA256.length)];
+        Util.arrayCopy(
+            ASN1_SHA256,
+            (short) 0,
+            markedData,
+            (short) 0,
+            (short) ASN1_SHA256.length
+        );
+        Util.arrayCopy(
+            buffer,
+            ISO7816.OFFSET_CDATA,
+            markedData,
+            (short) ASN1_SHA256.length,
+            inputLength
+        );
         byte dataLength = buffer[ISO7816.OFFSET_LC];
-        short outLength = cipher.doFinal(markedData, (short) 0, (short) markedData.length, buffer, ISO7816.OFFSET_CDATA);
+        short outLength = cipher.doFinal(
+            markedData,
+            (short) 0,
+            (short) markedData.length,
+            buffer,
+            ISO7816.OFFSET_CDATA
+        );
         apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, outLength);
     }
 
@@ -401,5 +481,38 @@ public class NotreProjet extends Applet {
         short qLen = key.getQ(buffer, (short) (offset + 4 + pLen));
         Util.setShort(buffer, (short) (offset + 2 + pLen), qLen);
         apdu.setOutgoingAndSend(offset, (short) (4 + pLen + qLen));
+    }
+
+    /**
+     * <h2>"Set server public key" command.</h2>
+     * <p>Sets the server's public key used for verification.</p>
+     * <p>Input format:</p>
+     * <table>
+     *     <tr><th>Offset</th><th>Length</th><th>Value</th></tr>
+     *     <tr><td>0</td><td>2</td><td>Exponent length (<code>exp_len</code>)</td></tr>
+     *     <tr><td>2</td><td><code>exp_len</code></td><td>Exponent</td></tr>
+     *     <tr><td>2 + <code>exp_len</code></td><td>2</td><td>Modulus length (<code>mod_len</code>)</td></tr>
+     *     <tr><td>4 + <code>exp_len</code></td><td><code>mod_len</code></td><td>Modulus</td></tr>
+     * </table>
+     *
+     * @param apdu the APDU object
+     */
+    private void setServerPublicKey(APDU apdu) {
+        byte[] buffer = apdu.getBuffer();
+        short offset = ISO7816.OFFSET_CDATA;
+
+        short expLen = Util.getShort(buffer, offset);
+        short modLen = Util.getShort(buffer, (short) (offset + 2 + expLen));
+
+        if (serverPublicKey == null) {
+            serverPublicKey = (RSAPublicKey) KeyPair.ALG_RSA;
+        }
+
+        serverPublicKey.setExponent(buffer, (short) (offset + 2), expLen);
+        serverPublicKey.setModulus(
+            buffer,
+            (short) (offset + 4 + expLen),
+            modLen
+        );
     }
 }
