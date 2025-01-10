@@ -90,6 +90,10 @@ public class NotreProjet extends Applet {
      */
     public static final byte INS_SET_SERVER_PUBLIC_KEY = 0x09;
     /**
+     * @see NotreProjet#encryptForServer(APDU)
+     */
+    public static final byte INS_ENCRYPT_FOR_SERVER = 0x0A;
+    /**
      * PIN failed, more than 3 tries remaining
      */
     public static final short SW_PIN_FAILED_MORE = (short) 0x9704;
@@ -263,6 +267,9 @@ public class NotreProjet extends Applet {
                 break;
             case INS_SET_SERVER_PUBLIC_KEY:
                 setServerPublicKey(apdu);
+                break;
+            case INS_ENCRYPT_FOR_SERVER:
+                encryptForServer(apdu);
                 break;
             default:
                 ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
@@ -514,5 +521,32 @@ public class NotreProjet extends Applet {
             (short) (offset + 4 + expLen),
             modLen
         );
+    }
+
+    /**
+     * <h2>"Encrypt for server" command.</h2>
+     * <p>Encrypts data using the server's public key.</p>
+     *
+     * @param apdu the APDU object
+     */
+    private void encryptForServer(APDU apdu) {
+        if (serverPublicKey == null) {
+            ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+        }
+
+        byte[] buffer = apdu.getBuffer();
+        Cipher cipher = Cipher.getInstance(Cipher.ALG_RSA_PKCS1, false);
+        cipher.init(serverPublicKey, Cipher.MODE_ENCRYPT);
+
+        short inputLength = buffer[ISO7816.OFFSET_LC];
+        short outLength = cipher.doFinal(
+            buffer,
+            ISO7816.OFFSET_CDATA,
+            inputLength,
+            buffer,
+            ISO7816.OFFSET_CDATA
+        );
+
+        apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, outLength);
     }
 }
